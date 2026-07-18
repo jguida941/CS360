@@ -20,7 +20,8 @@ known (C memory, Rust resources, OS processes, state machines).
 12. [Manual call vs the real lifecycle transition](#12-manual-call-vs-the-real-lifecycle-transition)
 13. [Configuration changes](#13-configuration-changes)
 14. [Restoring activity state (3.2)](#14-restoring-activity-state-32)
-15. [How this maps to what I already know](#15-how-this-maps-to-what-i-already-know)
+15. [Saving and restoring state with a Bundle](#15-saving-and-restoring-state-with-a-bundle)
+16. [How this maps to what I already know](#16-how-this-maps-to-what-i-already-know)
 
 ---
 
@@ -532,7 +533,126 @@ needs **extra code** to save and restore its state: `onSaveInstanceState` and th
 test rotation, slide down the notification bar and tap the auto-rotate toggle so it
 is blue.
 
-## 15. How this maps to what I already know
+## 15. Saving and restoring state with a Bundle
+
+This is the mechanism that fixes the lost-`TextView` problem from section 14. State
+is saved into a **Bundle** (key/value pairs) before the activity is destroyed, and
+read back when it is recreated.
+
+- **Save** in `onSaveInstanceState(Bundle outState)`: put values into `outState` under a key, for example `outState.putInt(KEY_TOTAL_PIZZAS, mTotalPizzas)`. Android calls this *before* destroying the activity.
+- **Restore** in `onCreate(Bundle savedInstanceState)`: Android passes that same bundle back. On first launch it is `null`; otherwise read values with the same key, for example `savedInstanceState.getInt(KEY_TOTAL_PIZZAS)`.
+- The **key** is a constant String shared by both methods (`private final String KEY_TOTAL_PIZZAS = "totalPizzas";`) so the put and the get line up.
+- **3.2.4:** an activity's state should be saved in `onSaveInstanceState()`, not in `onPause()`.
+
+**The save/restore cycle (Pizza Party, 3.2.3):**
+
+```text
+1. First launch: savedInstanceState is null, so nothing is restored and no total shows
+2. User calculates: result stored in mTotalPizzas and displayed
+3. Rotate: onSaveInstanceState() runs BEFORE destroy; putInt saves mTotalPizzas into outState
+4. Recreate: Android passes that bundle to onCreate() as savedInstanceState
+5. savedInstanceState is not null: getInt reads the total back, displayTotal() shows it
+```
+
+```mermaid
+flowchart TD
+    A([first launch]) --> B["onCreate sees savedInstanceState == null"]
+    B --> C([user calculates: mTotalPizzas set and displayed])
+    C -->|rotate| D["onSaveInstanceState puts mTotalPizzas into outState"]
+    D --> E["activity destroyed"]
+    E --> F["activity recreated"]
+    F --> G["onCreate sees savedInstanceState not null, reads it back, displays total"]
+    G --> H([total survives the rotation])
+```
+
+**Complete example (Figure 3.2.1):**
+
+```java
+package com.zybooks.pizzaparty;
+
+import android.os.Bundle;
+import android.view.View;
+import android.widget.EditText;
+import android.widget.RadioGroup;
+import android.widget.TextView;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class MainActivity extends AppCompatActivity {
+    private final String KEY_TOTAL_PIZZAS = "totalPizzas";
+    private int mTotalPizzas;
+
+    private EditText mNumAttendEditText;
+    private TextView mNumPizzasTextView;
+    private RadioGroup mHowHungryRadioGroup;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        // Assign the widgets to fields
+        mNumAttendEditText = findViewById(R.id.num_attend_edit_text);
+        mNumPizzasTextView = findViewById(R.id.num_pizzas_text_view);
+        mHowHungryRadioGroup = findViewById(R.id.hungry_radio_group);
+
+        // Restore state
+        if (savedInstanceState != null) {
+            mTotalPizzas = savedInstanceState.getInt(KEY_TOTAL_PIZZAS);
+            displayTotal();
+        }
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putInt(KEY_TOTAL_PIZZAS, mTotalPizzas);
+    }
+
+    public void calculateClick(View view) {
+        // Get how many are attending the party
+        int numAttend;
+        try {
+            String numAttendStr = mNumAttendEditText.getText().toString();
+            numAttend = Integer.parseInt(numAttendStr);
+        }
+        catch (NumberFormatException ex) {
+            numAttend = 0;
+        }
+
+        // Get hunger level selection
+        int checkedId = mHowHungryRadioGroup.getCheckedRadioButtonId();
+        PizzaCalculator.HungerLevel hungerLevel = PizzaCalculator.HungerLevel.RAVENOUS;
+        if (checkedId == R.id.light_radio_button) {
+            hungerLevel = PizzaCalculator.HungerLevel.LIGHT;
+        }
+        else if (checkedId == R.id.medium_radio_button) {
+            hungerLevel = PizzaCalculator.HungerLevel.MEDIUM;
+        }
+
+        // Show the number of pizzas needed
+        PizzaCalculator calc = new PizzaCalculator(numAttend, hungerLevel);
+        mTotalPizzas = calc.getTotalPizzas();
+        displayTotal();
+    }
+
+    private void displayTotal() {
+        String totalText = getString(R.string.total_pizzas_num, mTotalPizzas);
+        mNumPizzasTextView.setText(totalText);
+    }
+}
+```
+
+**@NonNull and @Nullable:**
+
+- `@NonNull` = the parameter, variable, or return value is **never null**.
+- `@Nullable` = it **could be null**.
+- `onSaveInstanceState(@NonNull Bundle outState)` promises `outState` is never null. Android Studio warns if an annotation is violated (for example, if `onSaveInstanceState()` were ever called with a null argument).
+
+**Try it:** enter 10 people, Medium hunger; Calculate shows "Total pizzas: 4". Rotate
+the emulator (auto-rotate on); after the recreate it still reads "Total pizzas: 4".
+
+## 16. How this maps to what I already know
 
 - **C memory:** `malloc`/`free` is direct ownership. Lifecycle callbacks are broader (any resource), and the framework decides *when* to call them.
 - **Inversion of control:** same idea as any callback-driven framework: I write the reactions, the framework drives the flow.
