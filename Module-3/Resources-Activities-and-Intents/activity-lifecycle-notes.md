@@ -17,7 +17,8 @@ known (C memory, Rust resources, OS processes, state machines).
 9. [Key facts from the 3.1.2 participation activity](#9-key-facts-from-the-312-participation-activity)
 10. [Logging lifecycle callbacks (instrumentation)](#10-logging-lifecycle-callbacks-instrumentation)
 11. [@Override, method names, and super](#11-override-method-names-and-super)
-12. [How this maps to what I already know](#12-how-this-maps-to-what-i-already-know)
+12. [Manual call vs the real lifecycle transition](#12-manual-call-vs-the-real-lifecycle-transition)
+13. [How this maps to what I already know](#13-how-this-maps-to-what-i-already-know)
 
 ---
 
@@ -358,7 +359,90 @@ Precise statement:
 
 > Manually calling `ANYTHINGHERE()` runs the same `super.onStart()` and the same log statement. It differs only in that it is not the method Android automatically dispatches as the lifecycle callback.
 
-## 12. How this maps to what I already know
+## 12. Manual call vs the real lifecycle transition
+
+The confusing question: if a custom method calls `super.onStart()`, isn't that the
+same as the real `onStart()`? At the Java call level, **yes**, the same parent method
+body runs. The catch: `super.onStart()` runs *one method*; it does not perform the
+whole Start transition.
+
+- `super.onStart()` = execute the parent's `onStart()` method body. That is all it does.
+- The **Start transition** = the framework machinery (`performStart()` and friends) that does pre-work, calls `onStart()`, checks that `super.onStart()` was called, starts fragments, and updates the activity's real state. `onStart()` is *one step inside* that machine, not the machine.
+
+State-machine framing: `onStart()` is the **transition handler**; Android is the
+**state machine** that decides when a transition happens and calls the handler.
+Running the handler by hand executes its code but does not make the machine change
+state.
+
+**Normal version (Android is the entry point):**
+
+```java
+public class MainActivity extends AppCompatActivity {
+    private final String TAG = "Lifecycle";
+
+    @Override
+    protected void onStart() {      // must be named onStart, or Android cannot find it
+        super.onStart();            // run the parent's onStart() body
+        Log.d(TAG, "onStart");
+    }
+}
+```
+
+```text
+Android's lifecycle machine reaches the Start step
+  -> it calls MainActivity.onStart()   (it looks up that exact name)
+    -> super.onStart()  runs the parent body
+    -> logs "onStart"
+```
+
+**Manual version (my code is the entry point):**
+
+```java
+public class MainActivity extends AppCompatActivity {
+    private final String TAG = "Lifecycle";
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        ANYTHINGHERE();             // I call it here, myself
+    }
+
+    protected void ANYTHINGHERE() {  // any name; Android never looks for this
+        super.onStart();            // runs the SAME parent onStart() body
+        Log.d(TAG, "onStart");
+    }
+}
+```
+
+```text
+Android calls onCreate()
+  -> my onCreate calls ANYTHINGHERE()
+    -> super.onStart()  runs the SAME parent body
+    -> logs "onStart"
+... later, Android still runs its real Start step and calls onStart() again
+```
+
+**The tell that proves the difference:** in the manual version the real `onStart()`
+was not overridden, so when Android runs its real Start step it calls the inherited
+`onStart()` anyway, and the parent body runs a second time. If the manual call had
+"done the lifecycle," there would be nothing left for Android to do. There is, and
+that leftover framework work is the difference.
+
+**Bottom line:**
+
+```text
+super.onStart()   = run the parent callback body (same bell, same sound)
+Start transition  = the framework deciding to start, then running that
+                    callback plus its own work before and after
+```
+
+Both run the same `super.onStart()`. What differs is who calls the method, when, and
+whether the activity's real state actually moved. (In practice you never hand-call
+lifecycle methods; out-of-order calls can corrupt the framework's internal state.
+This is only for reasoning about the difference.)
+
+## 13. How this maps to what I already know
 
 - **C memory:** `malloc`/`free` is direct ownership. Lifecycle callbacks are broader (any resource), and the framework decides *when* to call them.
 - **Inversion of control:** same idea as any callback-driven framework: I write the reactions, the framework drives the flow.
