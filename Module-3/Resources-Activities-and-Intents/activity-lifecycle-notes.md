@@ -19,7 +19,8 @@ known (C memory, Rust resources, OS processes, state machines).
 11. [@Override, method names, and super](#11-override-method-names-and-super)
 12. [Manual call vs the real lifecycle transition](#12-manual-call-vs-the-real-lifecycle-transition)
 13. [Configuration changes](#13-configuration-changes)
-14. [How this maps to what I already know](#14-how-this-maps-to-what-i-already-know)
+14. [Restoring activity state (3.2)](#14-restoring-activity-state-32)
+15. [How this maps to what I already know](#15-how-this-maps-to-what-i-already-know)
 
 ---
 
@@ -482,7 +483,56 @@ in-memory state that is not saved and restored is lost. This is the setup for
 `onSaveInstanceState` and the `savedInstanceState` bundle seen in
 `onCreate(Bundle savedInstanceState)`, which is likely the next topic.
 
-## 14. How this maps to what I already know
+## 14. Restoring activity state (3.2)
+
+When an activity is destroyed and recreated (a config change like rotation, or
+Android killing a stopped activity's process for memory), the user expects the
+**same state as before**: typed text still there, selections intact.
+
+**Widgets that save their state automatically:**
+
+- `EditText` remembers the text typed into it.
+- `RadioGroup` remembers which radio button was selected.
+- `TextView` does **not** retain its state by default.
+
+**Pizza Party example (3.2.1):** after rotating portrait to landscape, the activity
+is destroyed and recreated. The `EditText` (people = 25) and the `RadioGroup`
+(Ravenous) come back with the same values, but the "Total pizzas" `TextView` (13) is
+lost and shows nothing, because a TextView does not save its state by default.
+
+**When does Android save widget state? (3.2.2)**
+
+| Situation | Saved? | Why |
+|---|---|---|
+| Back button | No | Back tells Android the user is done with the activity |
+| Home button | Yes | The user may return to the activity later |
+| Recents button | Yes | The user may reopen the app from Recents |
+| Android kills a stopped activity for memory | Yes | Android auto-saves state for activities it destroys and will recreate |
+| Device restarts (loses power) | No | State is normally not saved across power loss |
+
+Pattern: state is saved when Android expects the user to **come back** to the same
+activity. It is not saved when the user is **finished** with it (Back) or the process
+truly ends (power loss).
+
+**Freezing text (making a TextView save itself):** set `android:freezesText="true"`
+on the `<TextView>`.
+
+```xml
+<TextView
+    ...
+    android:freezesText="true" />
+```
+
+This would let the Pizza Party total survive rotation. But a real activity usually
+needs **extra code** to save and restore its state: `onSaveInstanceState` and the
+`savedInstanceState` bundle (the parameter already seen in
+`onCreate(Bundle savedInstanceState)`).
+
+**Enabling auto-rotate (to test landscape):** apps run portrait-only by default. To
+test rotation, slide down the notification bar and tap the auto-rotate toggle so it
+is blue.
+
+## 15. How this maps to what I already know
 
 - **C memory:** `malloc`/`free` is direct ownership. Lifecycle callbacks are broader (any resource), and the framework decides *when* to call them.
 - **Inversion of control:** same idea as any callback-driven framework: I write the reactions, the framework drives the flow.
