@@ -16,7 +16,8 @@ known (C memory, Rust resources, OS processes, state machines).
 8. [Flowchart (zyBooks diagram)](#8-flowchart-zybooks-diagram)
 9. [Key facts from the 3.1.2 participation activity](#9-key-facts-from-the-312-participation-activity)
 10. [Logging lifecycle callbacks (instrumentation)](#10-logging-lifecycle-callbacks-instrumentation)
-11. [How this maps to what I already know](#11-how-this-maps-to-what-i-already-know)
+11. [@Override, method names, and super](#11-override-method-names-and-super)
+12. [How this maps to what I already know](#12-how-this-maps-to-what-i-already-know)
 
 ---
 
@@ -245,6 +246,12 @@ developer can watch which callbacks fire and in what order. On startup, Logcat
 shows `onCreate`, `onStart`, `onResume`.
 
 ```java
+package com.zybooks.helloandroid;
+
+import androidx.appcompat.app.AppCompatActivity;
+import android.os.Bundle;
+import android.util.Log;
+
 public class MainActivity extends AppCompatActivity {
     private final String TAG = "Lifecycle";
 
@@ -261,8 +268,29 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, "onStart");
     }
 
-    // onStop, onDestroy, onPause, onResume follow the same pattern:
-    // super.<callback>(); then Log.d(TAG, "<callback>");
+    @Override
+    protected void onStop() {
+        super.onStop();
+        Log.d(TAG, "onStop");
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        Log.d(TAG, "onDestroy");
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        Log.d(TAG, "onPause");
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Log.d(TAG, "onResume");
+    }
 }
 ```
 
@@ -283,7 +311,54 @@ D/Lifecycle: onResume
 - **The logging does not cause the transition.** Android causes the transition and calls the function; the log line only *proves* the callback ran.
 - Not every line is logging: `super.onCreate(...)` and `setContentView(...)` do real lifecycle and UI setup. The six `Log.d(...)` lines are purely for watching the lifecycle.
 
-## 11. How this maps to what I already know
+## 11. @Override, method names, and super
+
+**What `@Override` claims:** "the parent class has a method with this exact name
+and signature, and I am replacing it." The compiler checks that claim.
+
+- This does **not** compile, because `AppCompatActivity` has no method named `ANYTHINGHERE()`:
+
+```java
+@Override
+protected void ANYTHINGHERE() {   // compile error: nothing to override
+    super.onStart();
+    Log.d(TAG, "onStart");
+}
+```
+
+- Remove `@Override` and it compiles, but Android will **not** call it automatically. It runs only if I call it myself:
+
+```java
+protected void ANYTHINGHERE() {
+    super.onStart();
+    Log.d(TAG, "onStart");
+}
+
+public void someMethod() {
+    ANYTHINGHERE();
+}
+```
+
+Call chain:
+
+```text
+someMethod()
+  -> ANYTHINGHERE()
+    -> AppCompatActivity.onStart()   (via super.onStart())
+      -> Log.d(...)
+```
+
+**Key separations:**
+
+- The **method name** and `super.onStart()` are independent. `super.onStart()` always means "call the parent class's `onStart()`," regardless of what the enclosing method is named.
+- `ANYTHINGHERE` is a **method**, not a variable.
+- The only thing the name controls is **automatic dispatch**: Android invokes a method as a lifecycle callback only when its name and signature match (for example, `onStart()`). A differently named method runs the same `super.onStart()` and log line, but I have to call it myself.
+
+Precise statement:
+
+> Manually calling `ANYTHINGHERE()` runs the same `super.onStart()` and the same log statement. It differs only in that it is not the method Android automatically dispatches as the lifecycle callback.
+
+## 12. How this maps to what I already know
 
 - **C memory:** `malloc`/`free` is direct ownership. Lifecycle callbacks are broader (any resource), and the framework decides *when* to call them.
 - **Inversion of control:** same idea as any callback-driven framework: I write the reactions, the framework drives the flow.
