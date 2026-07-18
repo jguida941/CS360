@@ -14,11 +14,12 @@ known (C memory, Rust resources, OS processes, state machines).
 6. [Does importing make it happen?](#6-does-importing-make-it-happen)
 7. [The lifecycle as a state machine](#7-the-lifecycle-as-a-state-machine)
 8. [Flowchart (zyBooks diagram)](#8-flowchart-zybooks-diagram)
-9. [Key facts from the 3.1.2 participation activity](#9-key-facts-from-the-312-participation-activity)
+9. [Key facts from the participation activities](#9-key-facts-from-the-participation-activities)
 10. [Logging lifecycle callbacks (instrumentation)](#10-logging-lifecycle-callbacks-instrumentation)
 11. [@Override, method names, and super](#11-override-method-names-and-super)
 12. [Manual call vs the real lifecycle transition](#12-manual-call-vs-the-real-lifecycle-transition)
-13. [How this maps to what I already know](#13-how-this-maps-to-what-i-already-know)
+13. [Configuration changes](#13-configuration-changes)
+14. [How this maps to what I already know](#14-how-this-maps-to-what-i-already-know)
 
 ---
 
@@ -218,7 +219,7 @@ Reading the diagram:
 - **Back button** calls `onPause()` then `onStop()`. On devices **before Android 12**, `onDestroy()` also runs and the activity is destroyed. Android 12+ moves the app to the background instead of destroying the activity.
 - The course diagram simplifies the "user returns" path as `onStop() -> onStart()`. In the full Android lifecycle, `onRestart()` runs in between: `onStop() -> onRestart() -> onStart()`.
 
-## 9. Key facts from the 3.1.2 participation activity
+## 9. Key facts from the participation activities
 
 Verified points pulled from the course questions:
 
@@ -227,6 +228,9 @@ Verified points pulled from the course questions:
 - **Returning after that interruption:** `onRestart()` -> `onStart()` -> `onResume()`. (The course wording only lists `onStart()` and `onResume()`; `onRestart()` runs first in the full path.)
 - **Restarting a stopped-but-not-destroyed activity:** `onCreate()` is **not** called. It runs only on first launch, or when Android killed the process for memory, in which case a restart calls `onCreate()` again.
 - **Back button (Android 11 and below):** calls `onDestroy()` and destroys the activity. Android 12+ does not destroy it on Back (the app is backgrounded), so it restarts faster. Home and Recents do not destroy the activity.
+- **Recents button:** on newer Android it does not stop the running activity until the user actually switches to a different app. When it does stop the activity, Logcat shows `onPause` then `onStop`, in that order.
+- **Reselecting a stopped activity from Recents:** logs `onStart` then `onResume` (not just `onResume`), because a stopped activity restarts through `onRestart` -> `onStart` -> `onResume`.
+- **`onStop` means not visible:** if the last Logcat message is `onStop`, the activity is no longer visible.
 
 Flowchart: phone-call interruption and return.
 
@@ -442,7 +446,43 @@ whether the activity's real state actually moved. (In practice you never hand-ca
 lifecycle methods; out-of-order calls can corrupt the framework's internal state.
 This is only for reasoning about the difference.)
 
-## 13. How this maps to what I already know
+## 13. Configuration changes
+
+**Device configuration** = a set of characteristics that describe the current state
+of the device: screen orientation, screen size, language, keyboard type, and so on.
+When an activity is first launched, Android uses the current configuration to load
+its resources.
+
+- An app can ship **different resources for different configurations** (for example, one layout for portrait and another for landscape).
+- When a configuration characteristic changes (rotation, language, etc.), the running activity is **always destroyed and recreated** so it can reload the resources that fit the new configuration.
+- This happens **even if the app has no alternate resources**. The destroy/recreate is automatic; it is not conditional on having portrait/landscape variants.
+- **Changing the volume is not a configuration change**, so it does not destroy/recreate. Rotating the device and changing the language are configuration changes.
+
+Rotation callback sequence (portrait to landscape): the old activity is torn down
+and a new one is built, so all six callbacks fire.
+
+```text
+onPause() -> onStop() -> onDestroy()            (destroy the old activity)
+  -> onCreate() -> onStart() -> onResume()      (recreate for the new configuration)
+```
+
+```mermaid
+flowchart TD
+    RUN([activity running, portrait]) --> P["onPause()"]
+    P --> ST["onStop()"]
+    ST --> D["onDestroy()"]
+    D --> C["onCreate()"]
+    C --> S["onStart()"]
+    S --> RES["onResume()"]
+    RES --> RUN2([activity running, landscape])
+```
+
+Why it matters: because the activity is destroyed and recreated on rotation, any
+in-memory state that is not saved and restored is lost. This is the setup for
+`onSaveInstanceState` and the `savedInstanceState` bundle seen in
+`onCreate(Bundle savedInstanceState)`, which is likely the next topic.
+
+## 14. How this maps to what I already know
 
 - **C memory:** `malloc`/`free` is direct ownership. Lifecycle callbacks are broader (any resource), and the framework decides *when* to call them.
 - **Inversion of control:** same idea as any callback-driven framework: I write the reactions, the framework drives the flow.
