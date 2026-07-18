@@ -14,7 +14,9 @@ known (C memory, Rust resources, OS processes, state machines).
 6. [Does importing make it happen?](#6-does-importing-make-it-happen)
 7. [The lifecycle as a state machine](#7-the-lifecycle-as-a-state-machine)
 8. [Flowchart (zyBooks diagram)](#8-flowchart-zybooks-diagram)
-9. [How this maps to what I already know](#9-how-this-maps-to-what-i-already-know)
+9. [Key facts from the 3.1.2 participation activity](#9-key-facts-from-the-312-participation-activity)
+10. [Logging lifecycle callbacks (instrumentation)](#10-logging-lifecycle-callbacks-instrumentation)
+11. [How this maps to what I already know](#11-how-this-maps-to-what-i-already-know)
 
 ---
 
@@ -214,7 +216,74 @@ Reading the diagram:
 - **Back button** calls `onPause()` then `onStop()`. On devices **before Android 12**, `onDestroy()` also runs and the activity is destroyed. Android 12+ moves the app to the background instead of destroying the activity.
 - The course diagram simplifies the "user returns" path as `onStop() -> onStart()`. In the full Android lifecycle, `onRestart()` runs in between: `onStop() -> onRestart() -> onStart()`.
 
-## 9. How this maps to what I already know
+## 9. Key facts from the 3.1.2 participation activity
+
+Verified points pulled from the course questions:
+
+- **First launch order:** `onCreate()` -> `onStart()` -> `onResume()`. All three run, then the app is visible and ready for interaction.
+- **Interruption that hides the activity** (for example, answering a phone call): `onPause()` -> `onStop()`. Another activity (the phone) replaces the current one.
+- **Returning after that interruption:** `onRestart()` -> `onStart()` -> `onResume()`. (The course wording only lists `onStart()` and `onResume()`; `onRestart()` runs first in the full path.)
+- **Restarting a stopped-but-not-destroyed activity:** `onCreate()` is **not** called. It runs only on first launch, or when Android killed the process for memory, in which case a restart calls `onCreate()` again.
+- **Back button (Android 11 and below):** calls `onDestroy()` and destroys the activity. Android 12+ does not destroy it on Back (the app is backgrounded), so it restarts faster. Home and Recents do not destroy the activity.
+
+Flowchart: phone-call interruption and return.
+
+```mermaid
+flowchart TD
+    RUN([activity running]) -->|phone call answered| P["onPause()"]
+    P --> ST["onStop()"]
+    ST -->|call dismissed / user returns| RT["onRestart()"]
+    RT --> S["onStart()"]
+    S --> RES["onResume()"]
+    RES --> RUN2([activity running again])
+```
+
+## 10. Logging lifecycle callbacks (instrumentation)
+
+**Course figure (3.1.2):** an Activity that logs a message in every callback so the
+developer can watch which callbacks fire and in what order. On startup, Logcat
+shows `onCreate`, `onStart`, `onResume`.
+
+```java
+public class MainActivity extends AppCompatActivity {
+    private final String TAG = "Lifecycle";
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        Log.d(TAG, "onCreate");
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        Log.d(TAG, "onStart");
+    }
+
+    // onStop, onDestroy, onPause, onResume follow the same pattern:
+    // super.<callback>(); then Log.d(TAG, "<callback>");
+}
+```
+
+Logcat output when the app launches:
+
+```text
+D/Lifecycle: onCreate
+D/Lifecycle: onStart
+D/Lifecycle: onResume
+```
+
+**How I understand it:**
+
+- This code is **instrumentation for observation**, not lifecycle logic. The logging is added so I can *see* the order Android calls things.
+- `Log.d(TAG, "onStart")` means: Android calls `onStart()` -> my override calls `super.onStart()` -> then writes a debug line to Logcat.
+- `private final String TAG = "Lifecycle";` is the log **category/tag**, not the message. `Log.d(TAG, "onCreate")` prints roughly `Lifecycle: onCreate`.
+- Conceptually similar to `System.out.println("onCreate")` (Java) or `print("onCreate")` (Python). The difference: `Log.d()` uses Android's logging system, and Logcat also records log level, process, thread, timestamp, and tag, and lets me filter.
+- **The logging does not cause the transition.** Android causes the transition and calls the function; the log line only *proves* the callback ran.
+- Not every line is logging: `super.onCreate(...)` and `setContentView(...)` do real lifecycle and UI setup. The six `Log.d(...)` lines are purely for watching the lifecycle.
+
+## 11. How this maps to what I already know
 
 - **C memory:** `malloc`/`free` is direct ownership. Lifecycle callbacks are broader (any resource), and the framework decides *when* to call them.
 - **Inversion of control:** same idea as any callback-driven framework: I write the reactions, the framework drives the flow.
