@@ -14,6 +14,7 @@ hands-on Android Studio build itself is left to the app.
 6. [Model methods recap (3.3.3) and my read of isGameOver](#6-model-methods-recap-333-and-my-read-of-isgameover)
 7. [The View (MVC)](#7-the-view-mvc)
 8. [The Controller (MainActivity)](#8-the-controller-mainactivity)
+9. [Controller facts (3.3.5) and the cheat challenge](#9-controller-facts-335-and-the-cheat-challenge)
 
 ## 1. What Lights Out is
 
@@ -373,7 +374,6 @@ public class MainActivity extends AppCompatActivity {
             if (mGame.isLightOn(row, col)) {
                 gridButton.setBackgroundColor(mLightOnColor);
             } else {
-                // ---- 2nd screenshot missing: lines below completed from the standard pattern ----
                 gridButton.setBackgroundColor(mLightOffColor);
             }
         }
@@ -385,6 +385,23 @@ public class MainActivity extends AppCompatActivity {
 }
 ```
 
-Note: the second screenshot did not come through, so the final lines (the `else`
-color branch, the closing braces, and `onNewGameClick`) are completed from the
-standard zyBooks pattern. If your file differs, resend and I will correct it.
+(Verified against the full pasted `MainActivity.java`: the `else` branch sets
+`mLightOffColor` and `onNewGameClick` calls `startGame()`.)
+
+## 9. Controller facts (3.3.5) and the cheat challenge
+
+Quick facts and index math from the participation activity:
+
+- **Loading a color:** `ContextCompat.getColor()` is the method used in `onCreate()` to load a color resource (not `findViewById()` or `setBackgroundColor()`).
+- **Index to row/col examples** (using `row = index / 3`, `col = index % 3`):
+  - `buttonIndex = 3` gives `row = 3 / 3 = 1`, `col = 3 % 3 = 0`, so **row 1, col 0**.
+  - `buttonIndex = 8` gives `row = 8 / 3 = 2`, `col = 8 % 3 = 2`, so **row 2, col 2**.
+- **All lights off:** a `Toast` displays "Congratulations!" (the game does not auto-restart or turn the lights back on).
+
+**Try 3.3.1, add a cheat (optional):** make Lights Out winnable by long-clicking the
+top-left square.
+
+- Add a **public method to the Model** (`LightsOutGame`) that turns **all** lights off.
+- In the **Controller**, use **`setOnLongClickListener()`** on the button at row 0, col 0 (the top-left grid button).
+- The long-click callback calls the Model's cheat method, then redisplays the grid with `setButtonColors()`.
+- (Captured as reference; not implementing the build.)
