@@ -21,7 +21,8 @@ known (C memory, Rust resources, OS processes, state machines).
 13. [Configuration changes](#13-configuration-changes)
 14. [Restoring activity state (3.2)](#14-restoring-activity-state-32)
 15. [Saving and restoring state with a Bundle](#15-saving-and-restoring-state-with-a-bundle)
-16. [How this maps to what I already know](#16-how-this-maps-to-what-i-already-know)
+16. [Restoring in onRestoreInstanceState](#16-restoring-in-onrestoreinstancestate)
+17. [How this maps to what I already know](#17-how-this-maps-to-what-i-already-know)
 
 ---
 
@@ -542,7 +543,8 @@ read back when it is recreated.
 - **Save** in `onSaveInstanceState(Bundle outState)`: put values into `outState` under a key, for example `outState.putInt(KEY_TOTAL_PIZZAS, mTotalPizzas)`. Android calls this *before* destroying the activity.
 - **Restore** in `onCreate(Bundle savedInstanceState)`: Android passes that same bundle back. On first launch it is `null`; otherwise read values with the same key, for example `savedInstanceState.getInt(KEY_TOTAL_PIZZAS)`.
 - The **key** is a constant String shared by both methods (`private final String KEY_TOTAL_PIZZAS = "totalPizzas";`) so the put and the get line up.
-- **3.2.4:** an activity's state should be saved in `onSaveInstanceState()`, not in `onPause()`.
+- **Typed put/get:** values go in and out of the Bundle by type and key. `putString()` stores a String (`putCharSequence()` also works, since `String` implements `CharSequence`); `getBoolean()` returns a boolean, `getInt()` an int, and so on. The `put` (in `onSaveInstanceState`) and the `get` (in `onCreate`) must use the same key and type.
+- **3.2.4 facts:** state is saved in `onSaveInstanceState()`, not `onPause()`; the `get...` restore calls live in `onCreate()`, whose only parameter is `savedInstanceState`; and `savedInstanceState` is `null` when the activity is created for the first time (nothing to restore yet).
 
 **The save/restore cycle (Pizza Party, 3.2.3):**
 
@@ -652,7 +654,46 @@ public class MainActivity extends AppCompatActivity {
 **Try it:** enter 10 people, Medium hunger; Calculate shows "Total pizzas: 4". Rotate
 the emulator (auto-rotate on); after the recreate it still reads "Total pizzas: 4".
 
-## 16. How this maps to what I already know
+## 16. Restoring in onRestoreInstanceState
+
+`onRestoreInstanceState(Bundle)` is a second, optional place to restore state. Like
+the other callbacks, it is an Android Activity method that `MainActivity` inherits by
+extending `AppCompatActivity`. The import only makes the name available; the
+inheritance is what provides the method.
+
+- Android calls it **only when there is saved state** to restore, and it runs **after `onStart()`**.
+- Because it runs only when state exists, it does **not** need the `savedInstanceState != null` check that `onCreate` needs.
+
+Flow:
+
+```text
+Android has saved state
+  -> Android calls MainActivity.onRestoreInstanceState(savedInstanceState)
+    -> super.onRestoreInstanceState(...)   restores framework-managed state (e.g. view hierarchy)
+    -> getInt reads my own value (mTotalPizzas) from the Bundle
+    -> displayTotal() updates the screen
+```
+
+Two kinds of restoration happen here:
+
+- The **`super` call** lets Android restore framework-managed state, such as parts of the view hierarchy.
+- The **`getInt` line** restores my application-specific value (`mTotalPizzas`), and `displayTotal()` shows it.
+
+If I did not override it, the inherited version still runs and still restores the
+framework-managed state. I write the override only because I also want to restore my
+own pizza variable. It is the same hook pattern as the lifecycle callbacks: an
+existing Android callback that my code hooks into to add custom behavior.
+
+**onCreate vs onRestoreInstanceState for restoring:**
+
+| | `onCreate(Bundle)` | `onRestoreInstanceState(Bundle)` |
+|---|---|---|
+| Always called? | Yes | Only when saved state exists |
+| Bundle can be null? | Yes (null on first launch) | No (only called when there is state) |
+| Needs null check? | Yes | No |
+| When it runs | Start of the recreate | After `onStart()` |
+
+## 17. How this maps to what I already know
 
 - **C memory:** `malloc`/`free` is direct ownership. Lifecycle callbacks are broader (any resource), and the framework decides *when* to call them.
 - **Inversion of control:** same idea as any callback-driven framework: I write the reactions, the framework drives the flow.
