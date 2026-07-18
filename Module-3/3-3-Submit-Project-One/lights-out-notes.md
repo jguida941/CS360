@@ -13,6 +13,7 @@ hands-on Android Studio build itself is left to the app.
 5. [LightsOutGame class (the Model)](#5-lightsoutgame-class-the-model)
 6. [Model methods recap (3.3.3) and my read of isGameOver](#6-model-methods-recap-333-and-my-read-of-isgameover)
 7. [The View (MVC)](#7-the-view-mvc)
+8. [The Controller (MainActivity)](#8-the-controller-mainactivity)
 
 ## 1. What Lights Out is
 
@@ -258,3 +259,132 @@ My read of `isGameOver()`:
 - The New Game `Button` (`@+id/new_game_button`) uses `@style/GameOptionButton`, shows `@string/new_game`, sits below the grid (`layout_constraintTop_toBottomOf="@id/light_grid"`), and calls **`onNewGameClick`** through `android:onClick` (the Controller hook in `MainActivity`).
 
 **3.3.4 fact:** the grid buttons use the **`@style/LightButton`** style.
+
+## 8. The Controller (MainActivity)
+
+The **Controller** is the activity (`MainActivity`) that manipulates the Model and
+updates the View. It reads the Model to paint the View, and writes the Model in
+response to View events (button taps).
+
+**Fields:**
+
+- `mGame` (the `LightsOutGame` model), `mLightGrid` (the `GridLayout` from the layout), and `mLightOnColor` / `mLightOffColor` (the yellow/black colors resolved to int values).
+
+**`onCreate()`:**
+
+- `setContentView(R.layout.activity_main)`, then `findViewById(R.id.light_grid)`.
+- Loops the grid's children and attaches the **same** click handler to every button: `gridButton.setOnClickListener(this::onLightButtonClick)`.
+- Resolves the colors once with `ContextCompat.getColor(this, R.color.yellow / R.color.black)`.
+- Creates the model (`new LightsOutGame()`) and calls `startGame()`.
+
+**`startGame()`:** `mGame.newGame()` then `setButtonColors()`.
+
+**`onLightButtonClick(view)`** (a tapped light):
+
+- `indexOfChild(view)` gives the flat index (0 to 8) of the tapped button.
+- Convert flat index to grid coordinates: **`row = index / GRID_SIZE`**, **`col = index % GRID_SIZE`**.
+- `mGame.selectLight(row, col)` updates the model, then `setButtonColors()` repaints.
+- If `mGame.isGameOver()`, show a `Toast` with `R.string.congrats` ("Congratulations!").
+
+**`setButtonColors()`** (Model -> View):
+
+- Loops every button, converts its index to `row`/`col` the same way, and sets its background to `mLightOnColor` if `isLightOn(row, col)` else `mLightOffColor`. This is what reflects the model's true/false grid as yellow/black squares.
+
+**`onNewGameClick(view)`:** calls `startGame()`. It is wired to the New Game button by `android:onClick="onNewGameClick"` in the layout.
+
+**Key idea, index to row/col:** the 9 buttons are a flat list of `GridLayout`
+children (0 to 8), but the model is a 3x3 array. `index / 3` gives the row and
+`index % 3` gives the column, mapping button N to `mLightsGrid[row][col]`.
+
+**Colors are dynamic:** the on/off colors are not set in the layout XML; the
+Controller applies them at runtime in `setButtonColors()` so the grid updates as the
+model changes.
+
+Full code (Figure 3.3.7):
+
+```java
+package com.zybooks.lightsout;
+
+import android.os.Bundle;
+import android.view.View;
+import android.widget.Button;
+import android.widget.GridLayout;
+import android.widget.Toast;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+
+public class MainActivity extends AppCompatActivity {
+
+    private LightsOutGame mGame;
+    private GridLayout mLightGrid;
+    private int mLightOnColor;
+    private int mLightOffColor;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        mLightGrid = findViewById(R.id.light_grid);
+
+        // Add the same click handler to all grid buttons
+        for (int buttonIndex = 0; buttonIndex < mLightGrid.getChildCount(); buttonIndex++) {
+            Button gridButton = (Button) mLightGrid.getChildAt(buttonIndex);
+            gridButton.setOnClickListener(this::onLightButtonClick);
+        }
+
+        mLightOnColor = ContextCompat.getColor(this, R.color.yellow);
+        mLightOffColor = ContextCompat.getColor(this, R.color.black);
+
+        mGame = new LightsOutGame();
+        startGame();
+    }
+
+    private void startGame() {
+        mGame.newGame();
+        setButtonColors();
+    }
+
+    private void onLightButtonClick(View view) {
+
+        // Find the button's row and col
+        int buttonIndex = mLightGrid.indexOfChild(view);
+        int row = buttonIndex / LightsOutGame.GRID_SIZE;
+        int col = buttonIndex % LightsOutGame.GRID_SIZE;
+
+        mGame.selectLight(row, col);
+        setButtonColors();
+
+        // Congratulate the user if the game is over
+        if (mGame.isGameOver()) {
+            Toast.makeText(this, R.string.congrats, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void setButtonColors() {
+
+        for (int buttonIndex = 0; buttonIndex < mLightGrid.getChildCount(); buttonIndex++) {
+            Button gridButton = (Button) mLightGrid.getChildAt(buttonIndex);
+
+            // Find the button's row and col
+            int row = buttonIndex / LightsOutGame.GRID_SIZE;
+            int col = buttonIndex % LightsOutGame.GRID_SIZE;
+
+            if (mGame.isLightOn(row, col)) {
+                gridButton.setBackgroundColor(mLightOnColor);
+            } else {
+                // ---- 2nd screenshot missing: lines below completed from the standard pattern ----
+                gridButton.setBackgroundColor(mLightOffColor);
+            }
+        }
+    }
+
+    public void onNewGameClick(View view) {
+        startGame();
+    }
+}
+```
+
+Note: the second screenshot did not come through, so the final lines (the `else`
+color branch, the closing braces, and `onNewGameClick`) are completed from the
+standard zyBooks pattern. If your file differs, resend and I will correct it.
