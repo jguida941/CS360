@@ -1,0 +1,9 @@
+# Inventory App Design
+
+For the Mobile2App project I chose the Inventory App, which tracks items in a warehouse. I picked it because I worked as a warehouse associate and lived its core problem: reaching for an item and finding zero of it, with no warning until it is needed. The app's goal is to let staff see stock at a glance, adjust counts as items move, and get alerted before anything runs out.
+
+The major components come from the client's needs: a SQLite database with an items table and a users table; a login screen that also registers first-time users; a grid screen showing every item; controls to add, remove, and change an item's count; and a notification when any quantity reaches zero. The design is three screens (login, inventory grid, and item edit) over one database that is the single source of truth, so alerts fire off the real stored count. I have built these pieces before, including a full-stack contact suite with a JWT login and a CS-340 dashboard that shows database records in a filterable grid.
+
+Two competitors mark the range. Square (Square for Retail) ties inventory to point-of-sale, which keeps counts accurate but is heavier than a plain warehouse needs. Sortly is a mobile-first inventory app made for someone walking the floor with a phone, closer to my use case; mine differs by staying small and focused on stock levels and zero-quantity alerts.
+
+Three user types define the audience by goal. The warehouse associate needs speed, adjusting counts many times a day. The inventory manager needs prevention and lives in the grid and zero-quantity alerts. The owner or administrator needs control and visibility, valuing secure logins and trustworthy counts over daily entry. For all three, the app is a quick, dependable workday tool opened for seconds whenever stock moves.
