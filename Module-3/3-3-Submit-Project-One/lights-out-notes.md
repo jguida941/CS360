@@ -394,9 +394,9 @@ Quick facts and index math from the participation activity:
 
 - **Loading a color:** `ContextCompat.getColor()` is the method used in `onCreate()` to load a color resource (not `findViewById()` or `setBackgroundColor()`).
 - **Index to row/col examples** (using `row = index / 3`, `col = index % 3`):
-  - `buttonIndex = 3` gives `row = 3 / 3 = 1`, `col = 3 % 3 = 0`, so **row 1, col 0**.
-  - `buttonIndex = 8` gives `row = 8 / 3 = 2`, `col = 8 % 3 = 2`, so **row 2, col 2**.
-- **All lights off:** a `Toast` displays "Congratulations!" (the game does not auto-restart or turn the lights back on).
+  - `buttonIndex = 3` gives `row = 3 / 3 = 1`, `col = 3 % 3 = 0`, so **row 1, col 0** (the left-most button on the middle row).
+  - `buttonIndex = 8` gives `row = 8 / 3 = 2`, `col = 8 % 3 = 2`, so **row 2, col 2** (the right-most button on the bottom row). `getChildAt(index)` returns that button, and `setBackgroundColor()` sets its color.
+- **All lights off:** `isGameOver()` returns true, so the app shows a `Toast` reading "Congratulations!" (from the `congrats` string in `strings.xml`). It does not auto-restart or turn the lights back on.
 
 **Try 3.3.1, add a cheat (optional):** make Lights Out winnable by long-clicking the
 top-left square.
