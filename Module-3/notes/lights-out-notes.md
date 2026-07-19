@@ -16,6 +16,7 @@ hands-on Android Studio build itself is left to the app.
 8. [The Controller (MainActivity)](#8-the-controller-mainactivity)
 9. [Controller facts (3.3.5) and the cheat challenge](#9-controller-facts-335-and-the-cheat-challenge)
 10. [Handling rotations (3.4)](#10-handling-rotations-34)
+11. [Landscape layout and configuration qualifiers (3.4)](#11-landscape-layout-and-configuration-qualifiers-34)
 
 ## 1. What Lights Out is
 
@@ -422,9 +423,9 @@ Note: auto-rotate must be enabled to see this; some devices have it off by defau
 1. **Lock the activity to portrait** so it never restarts on rotation.
 2. **Provide a separate landscape layout** file (a `res/layout-land/` version) sized for landscape.
 
-**Solution 1 (used here, common for portrait-only games):** set the `<activity>`
-element's `android:screenOrientation` to `"portrait"` in `AndroidManifest.xml`
-(Figure 3.4.2).
+**Solution 1, lock to portrait (common for portrait-only games):** set the
+`<activity>` element's `android:screenOrientation` to `"portrait"` in
+`AndroidManifest.xml` (Figure 3.4.2).
 
 ```xml
 <activity android:name=".MainActivity"
@@ -434,7 +435,102 @@ element's `android:screenOrientation` to `"portrait"` in `AndroidManifest.xml`
 With this, `MainActivity` stays in portrait even when the device is turned to
 landscape (Figure 3.4.3), so there is no restart and no broken layout.
 
+**3.4.1 facts:**
+
+- If the orientation is **not** locked, rotating portrait to landscape restarts the activity, and `onCreate()` reloads the same layout file.
+- `screenOrientation="portrait"` does **not** stop the activity from running in landscape; the activity still runs, it just keeps showing the portrait layout.
+- When the manifest locks the orientation, the activity does **not** restart on an orientation change (the configuration change is prevented).
+
 **Connection to the lifecycle notes:** locking orientation *prevents the recreate from
 happening*, which is a different fix from saving and restoring state with a Bundle.
 Saving state keeps data *across* a recreate; locking orientation avoids the recreate
 in the first place.
+
+## 11. Landscape layout and configuration qualifiers (3.4)
+
+**Solution 2, supply a landscape layout.** Instead of locking, give Android a second
+layout it uses only in landscape.
+
+Procedure in Android Studio:
+
+1. Open `res/layout/activity_main.xml` in Design mode.
+2. Click the `activity_main.xml` button and choose **Create Landscape Qualifier**.
+3. Android Studio creates `res/layout-land/activity_main.xml`; replace its XML with the landscape design (Figure 3.4.4).
+4. Rotate to landscape and verify the grid is on the left and New Game on the right (Figure 3.4.5).
+
+The landscape layout differs from portrait mainly in how the pieces are constrained:
+the `GridLayout` is pinned to the left and the New Game `Button` sits to its right
+(`app:layout_constraintLeft_toRightOf="@+id/light_grid"`) instead of being stacked
+below it.
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="com.zybooks.lightsout.MainActivity">
+
+    <GridLayout
+        android:id="@+id/light_grid"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:useDefaultMargins="true"
+        android:columnCount="3"
+        android:rowCount="3"
+        android:layout_margin="5dp"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toLeftOf="@+id/new_game_button"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" >
+
+        <Button style="@style/LightButton" />
+        <Button style="@style/LightButton" />
+        <Button style="@style/LightButton" />
+        <Button style="@style/LightButton" />
+        <Button style="@style/LightButton" />
+        <Button style="@style/LightButton" />
+        <Button style="@style/LightButton" />
+        <Button style="@style/LightButton" />
+        <Button style="@style/LightButton" />
+    </GridLayout>
+
+    <Button
+        android:id="@+id/new_game_button"
+        style="@style/GameOptionButton"
+        android:layout_marginTop="20dp"
+        android:text="@string/new_game"
+        android:onClick="onNewGameClick"
+        app:layout_constraintLeft_toRightOf="@+id/light_grid"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/light_grid" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+```
+
+**The mechanism (the rule the class skipped):**
+
+- `-land` is a **configuration qualifier**. Android's resource system treats a `res/layout-land/` folder as "use these layouts when the device is in landscape."
+- Both files share the **same logical name**, `R.layout.activity_main`. Two physical files, one resource ID.
+- `setContentView(R.layout.activity_main)` does not pick the file. Android's **resource manager** resolves that ID to the best matching physical file for the current configuration:
+
+```text
+Portrait:   res/layout/activity_main.xml
+Landscape:  res/layout-land/activity_main.xml
+```
+
+- This is **not a Java language feature**. Java always just asks for `R.layout.activity_main`; the Android framework and resource system do the selection automatically at runtime.
+
+**Locking vs a landscape layout are different fixes:**
+
+- `android:screenOrientation="portrait"` **locks** the activity so landscape never happens.
+- `res/layout-land/` does **not** lock anything; it supplies an alternate design for when landscape does happen.
+
+**Interview-style answer:** Android supports configuration-specific resources through
+directory qualifiers. The default layout lives in `res/layout` and the landscape
+version with the same filename in `res/layout-land`; both are referenced as
+`R.layout.activity_main`. When the activity is recreated after an orientation change,
+Android's resource manager automatically selects the best matching layout for the
+current configuration.
