@@ -18,6 +18,8 @@ hands-on Android Studio build itself is left to the app.
 10. [Handling rotations (3.4)](#10-handling-rotations-34)
 11. [Landscape layout and configuration qualifiers (3.4)](#11-landscape-layout-and-configuration-qualifiers-34)
 12. [Restoring Lights Out state (3.4)](#12-restoring-lights-out-state-34)
+13. [Multiple activities (3.5)](#13-multiple-activities-35)
+14. [Starting an activity with an intent (3.5)](#14-starting-an-activity-with-an-intent-35)
 
 ## 1. What Lights Out is
 
@@ -675,3 +677,146 @@ Walkthrough in words:
 - `onCreate` always builds a **brand-new** `LightsOutGame` (the old one was destroyed on rotation).
 - First launch: `savedInstanceState` is `null`, so `startGame()` makes a fresh random board.
 - After rotation: `savedInstanceState` is not null (Android hands back the filled Bundle). `getString(GAME_STATE)` pulls the saved string, `setState` rebuilds the model, `setButtonColors` repaints. The model is restored first, then the interface is redrawn from it.
+
+## 13. Multiple activities (3.5)
+
+**Multiple activities:** most Android apps have multiple screens, each controlled by
+its own **activity**; to move between screens, one activity starts another. Lights Out
+adds two: `HelpActivity` (shows instructions plus a light-bulb image) and
+`ColorActivity` (lets the user pick a grid color).
+
+**Creating an activity** needs three pieces, and Android Studio makes all three when
+you use `File > New > Activity > Empty Views Activity`:
+
+1. a Java class for the activity,
+2. a layout XML file,
+3. an `<activity>` element in `AndroidManifest.xml`.
+
+Adding `HelpActivity` and `ColorActivity` creates `HelpActivity.java`,
+`ColorActivity.java`, `activity_help.xml`, and `activity_color.xml`, and registers
+both in the manifest.
+
+**The manifest (Figure 3.5.2):** every activity is registered with an `<activity>`
+element inside `<application>`.
+
+```xml
+<activity android:name=".ColorActivity" android:exported="false" />
+<activity android:name=".HelpActivity" android:exported="false" />
+<activity
+    android:name=".MainActivity"
+    android:exported="true">
+    <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+    </intent-filter>
+</activity>
+```
+
+- `android:exported="false"` means the activity cannot be launched by other apps (internal only). `HelpActivity` and `ColorActivity` are internal.
+- `MainActivity` is `exported="true"` and has an `<intent-filter>` with `action.MAIN` and `category.LAUNCHER`. **That filter is what makes it the app's entry (launcher) screen.**
+
+**3.5.1 facts:**
+
+- A new activity loads its matching layout by default (`HelpActivity` uses `activity_help.xml`).
+- The `MAIN`/`LAUNCHER` intent-filter decides which activity launches. If the names were swapped so that filter sat on `HelpActivity`, then `HelpActivity` would be the launch screen.
+
+**HelpActivity layout (Figure 3.5.4):** instructions on top, light-bulb image on the
+bottom, both centered horizontally. Supporting resources: strings `help_instructions`
+= "Turn off all the lights to win!" and `light_bulb` = "Light bulb" in `strings.xml`,
+and `light_bulb.png` in `res/drawable`.
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="com.zybooks.lightsout.HelpActivity">
+
+    <TextView
+        android:id="@+id/instructionsTextView"
+        android:textSize="50sp"
+        android:layout_margin="30dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="@string/help_instructions"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent" />
+
+    <ImageView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:src="@drawable/light_bulb"
+        android:contentDescription="@string/light_bulb"
+        android:layout_marginBottom="30dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+```
+
+**3.5.2 facts:**
+
+- Both views are centered **horizontally** (each has left and right constrained to `parent`): true.
+- They are **not** centered vertically: the `TextView` is pinned to the top, the `ImageView` to the bottom.
+- The layout is **not** ideal for landscape (image and text can overlap; Try 3.5.1 suggests a landscape layout).
+
+## 14. Starting an activity with an intent (3.5)
+
+**`startActivity()`** (an `Activity` method) launches another activity, using an
+**`Intent`** to say which one. An `Intent` specifies the activity to start (or a type
+of action to perform) and can optionally carry data to the started activity.
+
+**Explicit intent:** `new Intent(this, HelpActivity.class)` takes the current context
+and the target activity's `.class` object.
+
+Wiring a Help button on `MainActivity` to open `HelpActivity`:
+
+1. Add the label string: `<string name="help_button">Help</string>`.
+2. Add the button to **both** `res/layout/activity_main.xml` and `res/layout-land/activity_main.xml`, under the New Game button:
+
+```xml
+<Button
+    android:id="@+id/help_button"
+    style="@style/GameOptionButton"
+    android:text="@string/help_button"
+    android:onClick="onHelpClick"
+    app:layout_constraintLeft_toLeftOf="@id/new_game_button"
+    app:layout_constraintRight_toRightOf="@id/new_game_button"
+    app:layout_constraintTop_toBottomOf="@id/new_game_button" />
+```
+
+3. Add the click handler in `MainActivity`, and the new activity (Figure 3.5.3):
+
+```java
+// MainActivity: start HelpActivity when the Help button is pressed
+public void onHelpClick(View view) {
+    Intent intent = new Intent(this, HelpActivity.class);
+    startActivity(intent);
+}
+
+// HelpActivity: just loads its layout
+public class HelpActivity extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_help);
+    }
+}
+```
+
+**3.5.4 facts:**
+
+- Press **Back** to return from `HelpActivity` to `MainActivity`. Activities form a back stack, and Back pops the current one.
+- The argument passed to `startActivity()` is the **`intent`**.
+- The intent constructor needs the target activity's **`.class`** object, for example `new Intent(this, HighScoreActivity.class)` (not the bare name, not `.java`).
+
+**Try 3.5.1 (optional):** `HelpActivity` in landscape puts the bulb on top of the
+text. Fix by swapping the `TextView`/`ImageView` order in `activity_help.xml`, or make
+a `layout-land` version with the bulb on one side and the text on the other. (Captured
+as reference; not building it.)
