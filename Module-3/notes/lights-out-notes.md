@@ -17,6 +17,7 @@ hands-on Android Studio build itself is left to the app.
 9. [Controller facts (3.3.5) and the cheat challenge](#9-controller-facts-335-and-the-cheat-challenge)
 10. [Handling rotations (3.4)](#10-handling-rotations-34)
 11. [Landscape layout and configuration qualifiers (3.4)](#11-landscape-layout-and-configuration-qualifiers-34)
+12. [Restoring Lights Out state (3.4)](#12-restoring-lights-out-state-34)
 
 ## 1. What Lights Out is
 
@@ -534,3 +535,119 @@ version with the same filename in `res/layout-land`; both are referenced as
 `R.layout.activity_main`. When the activity is recreated after an orientation change,
 Android's resource manager automatically selects the best matching layout for the
 current configuration.
+
+**3.4.2 facts:**
+
+- Which layout loads by orientation: `res/layout` in portrait, `res/layout-land` in landscape. (Alternative naming: `res/layout-port` for portrait and `res/layout` for landscape.)
+- The landscape grid is centered vertically because the `GridLayout` constrains both `layout_constraintTop_toTopOf` and `layout_constraintBottom_toBottomOf` to `parent` (equal top and bottom spacing).
+- Without saving state, the grid does **not** keep its on/off configuration across a rotation: `MainActivity` is recreated and the game restarts. That is the problem the next section fixes.
+
+## 12. Restoring Lights Out state (3.4)
+
+**The problem:** even with the landscape layout in place, rotating still resets the
+light grid, because `MainActivity` is recreated on the config change and does not save
+or restore state. Only the **Model** (`LightsOutGame`) holds state worth saving.
+
+**What to save (the key rule):** a `Bundle` can store primitives (int, String,
+boolean) and objects that implement `Serializable`/`Parcelable`, but good practice is
+to **save only the smallest authoritative information needed to rebuild the state**,
+not whole custom objects. For Lights Out the on/off grid is the entire game state, and
+it fits in a **single string**. Button colors and positions are only a visual view of
+that grid and can be regenerated afterward.
+
+**Serialize the grid (Figure 3.4.6):** `getState()` flattens the 3x3 boolean grid to a
+string, `setState()` rebuilds the grid from that string. These are **ordinary methods
+on `LightsOutGame`, not Android callbacks** (no `@Override`; the names are arbitrary,
+for example they could be `turnBoardIntoString`). Android never calls them; the
+Controller does.
+
+```java
+public class LightsOutGame {
+    ...
+
+    public String getState() {
+        StringBuilder boardString = new StringBuilder();
+        for (int row = 0; row < GRID_SIZE; row++) {
+            for (int col = 0; col < GRID_SIZE; col++) {
+                char value = mLightsGrid[row][col] ? 'T' : 'F';
+                boardString.append(value);
+            }
+        }
+
+        return boardString.toString();
+    }
+
+    public void setState(String gameState) {
+        int index = 0;
+        for (int row = 0; row < GRID_SIZE; row++) {
+            for (int col = 0; col < GRID_SIZE; col++) {
+                mLightsGrid[row][col] = gameState.charAt(index) == 'T';
+                index++;
+            }
+        }
+    }
+}
+```
+
+How it works:
+
+- `getState()`: the ternary `mLightsGrid[row][col] ? 'T' : 'F'` writes `'T'` for on and `'F'` for off, appended to a `StringBuilder` (a normal Java helper for building strings efficiently, not Android-specific). Row by row, it flattens the 2D grid into one line:
+
+```text
+true   false  true
+false  false  true      getState()  ->  "TFTFFTTTF"
+true   true   false
+```
+
+- `setState()`: reverses it. `gameState.charAt(index) == 'T'` reads one character and produces a boolean (`'T'` gives true, `'F'` gives false), assigns it to the cell, then `index++` advances. `"TFTFFTTTF"` rebuilds the same grid.
+
+Analogy: same idea as serializing a tic-tac-toe board to `"XO__X_O__"` and restoring
+it later, except each Lights Out cell has only two states (`T`/`F`).
+
+**Wire it into the Controller (Figure 3.4.7):** save the string in
+`onSaveInstanceState`, restore it in `onCreate`.
+
+```java
+public class MainActivity extends AppCompatActivity {
+
+    private final String GAME_STATE = "gameState";
+    ...
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        ...
+
+        mGame = new LightsOutGame();
+
+        if (savedInstanceState == null) {
+            startGame();
+        }
+        else {
+            String gameState = savedInstanceState.getString(GAME_STATE);
+            mGame.setState(gameState);
+            setButtonColors();
+        }
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putString(GAME_STATE, mGame.getState());
+    }
+```
+
+- **First launch** (`savedInstanceState == null`): `startGame()` builds a new random board.
+- **After a rotation** (bundle present): read the saved string with `getString(GAME_STATE)`, call `mGame.setState(...)` to rebuild the model, then `setButtonColors()` to redraw. No new random game.
+- Android calls `onSaveInstanceState()` before destroying; the Controller **explicitly** calls `mGame.getState()` and puts the string in the bundle. Same `onSaveInstanceState` / `savedInstanceState` Bundle mechanism as the lifecycle notes, just with the model serialized to a string.
+
+**The complete flow:**
+
+```text
+Boolean grid
+  -> getState()          "TFTFFTTTF"
+  -> stored in Bundle (putString)
+  -> activity destroyed and recreated
+  -> read string from Bundle (getString)
+  -> setState()          boolean grid restored
+  -> setButtonColors()   same board redrawn
+```
