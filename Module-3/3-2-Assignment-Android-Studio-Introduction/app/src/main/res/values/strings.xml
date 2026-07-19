@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">android_studio_intro_justin_guida</string>
+    <string name="say_hello">Say Hello</string>
+    <string name="name_hint">Enter your name</string>
+</resources>
