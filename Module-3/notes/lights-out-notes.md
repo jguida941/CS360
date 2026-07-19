@@ -651,3 +651,27 @@ Boolean grid
   -> setState()          boolean grid restored
   -> setButtonColors()   same board redrawn
 ```
+
+**Terminology (so the names stop being confusing):**
+
+| Name | What it actually is |
+|---|---|
+| `GAME_STATE` | A fixed **key/label** holding the text `"gameState"` (like the name on a storage box). `final` means it cannot be reassigned. The same key is used to put and to get. **It is not the game state.** |
+| `gameState` (local variable) | The retrieved `T`/`F` **string** pulled out of the Bundle. |
+| `mGame.getState()` | Creates the `T`/`F` string from the grid. |
+| `mGame.setState(...)` | Rebuilds the grid from the string. |
+| `outState` | The Bundle **while saving** (in `onSaveInstanceState`). |
+| `savedInstanceState` | That same Bundle **when Android hands it back** during recreation (in `onCreate`). |
+
+Name traps:
+
+- **`extends AppCompatActivity`** means `MainActivity` inherits Android activity behavior from the AndroidX `AppCompatActivity`. That inheritance is what *allows* it to override `onCreate` and `onSaveInstanceState`.
+- **`@Override`** does not mean "call Android." It means "this class supplies its own version of an inherited method." Android calls that overridden method later, as part of the lifecycle.
+- **`@NonNull`** does not mean "save only if not empty." It says the `outState` parameter is not expected to be null; it is documentation and static checking, not a runtime condition.
+- **`super.onSaveInstanceState(outState)`** lets `AppCompatActivity` save the framework-level state it manages, before the app adds its own string.
+
+Walkthrough in words:
+
+- `onCreate` always builds a **brand-new** `LightsOutGame` (the old one was destroyed on rotation).
+- First launch: `savedInstanceState` is `null`, so `startGame()` makes a fresh random board.
+- After rotation: `savedInstanceState` is not null (Android hands back the filled Bundle). `getString(GAME_STATE)` pulls the saved string, `setState` rebuilds the model, `setButtonColors` repaints. The model is restored first, then the interface is redrawn from it.
