@@ -15,6 +15,7 @@ hands-on Android Studio build itself is left to the app.
 7. [The View (MVC)](#7-the-view-mvc)
 8. [The Controller (MainActivity)](#8-the-controller-mainactivity)
 9. [Controller facts (3.3.5) and the cheat challenge](#9-controller-facts-335-and-the-cheat-challenge)
+10. [Handling rotations (3.4)](#10-handling-rotations-34)
 
 ## 1. What Lights Out is
 
@@ -405,3 +406,35 @@ top-left square.
 - In the **Controller**, use **`setOnLongClickListener()`** on the button at row 0, col 0 (the top-left grid button).
 - The long-click callback calls the Model's cheat method, then redisplays the grid with `setButtonColors()`.
 - (Captured as reference; not implementing the build.)
+
+## 10. Handling rotations (3.4)
+
+**The problem:** rotating Lights Out to landscape triggers a configuration change, so
+`MainActivity` restarts. With only one layout file, the same portrait layout reloads
+in landscape and the New Game button ends up hidden off-screen (Figure 3.4.1). The
+game also resets, because a restarted activity loses its state (the same
+destroy/recreate covered in the lifecycle notes).
+
+Note: auto-rotate must be enabled to see this; some devices have it off by default.
+
+**Two general solutions:**
+
+1. **Lock the activity to portrait** so it never restarts on rotation.
+2. **Provide a separate landscape layout** file (a `res/layout-land/` version) sized for landscape.
+
+**Solution 1 (used here, common for portrait-only games):** set the `<activity>`
+element's `android:screenOrientation` to `"portrait"` in `AndroidManifest.xml`
+(Figure 3.4.2).
+
+```xml
+<activity android:name=".MainActivity"
+    android:screenOrientation="portrait">
+```
+
+With this, `MainActivity` stays in portrait even when the device is turned to
+landscape (Figure 3.4.3), so there is no restart and no broken layout.
+
+**Connection to the lifecycle notes:** locking orientation *prevents the recreate from
+happening*, which is a different fix from saving and restoring state with a Bundle.
+Saving state keeps data *across* a recreate; locking orientation avoids the recreate
+in the first place.
